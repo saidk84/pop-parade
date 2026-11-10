@@ -1,0 +1,51 @@
+name: Build Pop Parade APK
+
+on:
+  push:
+    branches: [apk-release]
+    paths:
+      - 'android/**'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-35,build-tools;35.0.0'
+      - name: Build APK
+        run: gradle --no-daemon --console=plain -p android assembleDebug
+      - name: Name APK and read version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android/app/build.gradle | head -n 1)
+          test -n "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "pop-parade-${VERSION}.apk"
+      - name: Publish APK release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Pop Parade v${{ steps.version.outputs.version }}
+          target_commitish: apk-release
+          files: pop-parade-${{ steps.version.outputs.version }}.apk
+          fail_on_unmatched_files: true
+
